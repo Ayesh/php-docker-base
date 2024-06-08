@@ -44,24 +44,24 @@ jobs:
         severity: 'CRITICAL,HIGH'
 
     - name: Retag new image with latest tag so we can push the scanned version
-      run: docker image tag php-docker-base:trivytemp ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:latest
+      run: docker image tag php-docker-base:trivytemp ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest
 
     - name: Push with latest tag
-      run: docker push ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:latest
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest
     - name: Retag new image with commit hash
-      run: docker image tag ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:latest ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:$(echo ${GITHUB_SHA} | cut -c1-8)
+      run: docker image tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:$(echo ${GITHUB_SHA} | cut -c1-8)
     - name: Push with commit hash tag
-      run: docker push ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:$(echo ${GITHUB_SHA} | cut -c1-8)
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:$(echo ${GITHUB_SHA} | cut -c1-8)
     - name: Retag new image with php7 tag
-      run: docker image tag ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:latest ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php7
+      run: docker image tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7
     - name: Push with commit php7 tag
-      run: docker push ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php7
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7
 
     #php7-review
     - name: Build the PHP7 review container image
-      run: docker build . --tag ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php7-review --file Dockerfile.php7-review
+      run: docker build . --tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7-review --file Dockerfile.php7-review
     - name: Push with commit php7-review tag
-      run: docker push ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php7-review
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7-review
 
   php8:
     runs-on: ubuntu-latest
@@ -83,28 +83,28 @@ jobs:
 
     #php8
     - name: Build the container image
-      run: docker build . --tag ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8 --file Dockerfile.php8
+      run: docker build . --tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8 --file Dockerfile.php8
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8
+        image-ref: ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8
         format: 'table'
         exit-code: '1'
         ignore-unfixed: true
         vuln-type: 'os,library'
         severity: 'CRITICAL,HIGH'
     - name: Push with php8 tag
-      run: docker push ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8
     - name: Retag new image with commit hash
-      run: docker image tag ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8 ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8-$(echo ${GITHUB_SHA} | cut -c1-8)
+      run: docker image tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8 ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-$(echo ${GITHUB_SHA} | cut -c1-8)
     - name: Push with commit hash tag and php8 tag
-      run: docker push ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8-$(echo ${GITHUB_SHA} | cut -c1-8)
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-$(echo ${GITHUB_SHA} | cut -c1-8)
 
     #php8-review
     - name: Build the PHP8 review container image
-      run: docker build . --tag ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8-review --file Dockerfile.php8-review
+      run: docker build . --tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-review --file Dockerfile.php8-review
     - name: Push with commit php8-review tag
-      run: docker push ghcr.io/${{ github.repository_owner }}/${{ env.CI_REPOSITORY_NAME }}:php8-review
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-review
 
   cleanup:
     needs: [php7, php8]
