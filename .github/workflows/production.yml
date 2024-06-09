@@ -9,15 +9,22 @@ on:
   - cron: 00 4 * * *
 
 jobs:
-  php7:
+  build:
     runs-on: ubuntu-latest
+
+    name: Build Docker image
+    strategy:
+      matrix:
+        php:
+          - php7
+          - php8
 
     steps:
     - name: GitHub Environment Variables Action
       uses: FranzDiebold/github-env-vars-action@v2
 
     - name: Shallow clone code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -28,10 +35,8 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    #php7
-    #tag with temp tag to make sure trivy scans the new version
     - name: Build the container image
-      run: docker build . --tag php-docker-base:trivytemp --file Dockerfile.php7
+      run: docker build . --tag php-docker-base:trivytemp --file Dockerfile.${{ matrix.php }}
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -46,82 +51,25 @@ jobs:
     - name: Retag new image with latest tag so we can push the scanned version
       run: docker image tag php-docker-base:trivytemp ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest
 
-    - name: Push with latest tag
-      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest
-    - name: Retag new image with commit hash
-      run: docker image tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:$(echo ${GITHUB_SHA} | cut -c1-8)
-    - name: Push with commit hash tag
-      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:$(echo ${GITHUB_SHA} | cut -c1-8)
-    - name: Retag new image with php7 tag
-      run: docker image tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7
-    - name: Push with commit php7 tag
-      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7
-
-    #php7-review
-    - name: Build the PHP7 review container image
-      run: docker build . --tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7-review --file Dockerfile.php7-review
-    - name: Push with commit php7-review tag
-      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php7-review
-
-  php8:
-    runs-on: ubuntu-latest
-    steps:
-    - name: GitHub Environment Variables Action
-      uses: FranzDiebold/github-env-vars-action@v2
-
-    - name: Shallow clone code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Login to Container Registry ghcr.io
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    #php8
-    - name: Build the container image
-      run: docker build . --tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8 --file Dockerfile.php8
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8
-        format: 'table'
-        exit-code: '1'
-        ignore-unfixed: true
-        vuln-type: 'os,library'
-        severity: 'CRITICAL,HIGH'
-    - name: Push with php8 tag
-      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8
-    - name: Retag new image with commit hash
-      run: docker image tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8 ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-$(echo ${GITHUB_SHA} | cut -c1-8)
-    - name: Push with commit hash tag and php8 tag
-      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-$(echo ${GITHUB_SHA} | cut -c1-8)
-
-    #php8-review
-    - name: Build the PHP8 review container image
-      run: docker build . --tag ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-review --file Dockerfile.php8-review
-    - name: Push with commit php8-review tag
-      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:php8-review
+    - name: Push with commit ${{ matrix.php }} tag
+      run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:${{ matrix.php }}
 
   cleanup:
-    needs: [php7, php8]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
     - name: GitHub Environment Variables Action
       uses: FranzDiebold/github-env-vars-action@v2
 
     - name: Login to Container Registry ghcr.io
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Delete old versions of the package, keeping a few of the newest
-      uses: actions/delete-package-versions@v4
+      uses: actions/delete-package-versions@v5
       with:
         package-name: ${{ env.CI_REPOSITORY_NAME }}
         package-type: container
