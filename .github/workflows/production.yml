@@ -29,7 +29,7 @@ jobs:
         fetch-depth: 0
 
     - name: Login to Container Registry ghcr.io
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -49,7 +49,7 @@ jobs:
         severity: 'CRITICAL,HIGH'
 
     - name: Retag new image with latest tag so we can push the scanned version
-      run: docker image tag php-docker-base:trivytemp ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:latest
+      run: docker image tag php-docker-base:trivytemp ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:${{ matrix.php }}
 
     - name: Push with commit ${{ matrix.php }} tag
       run: docker push ghcr.io/ayesh/${{ env.CI_REPOSITORY_NAME }}:${{ matrix.php }}
