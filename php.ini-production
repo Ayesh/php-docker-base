@@ -16,7 +16,6 @@ implicit_flush = Off
 unserialize_callback_func =
 serialize_precision = 17
 disable_functions =
-disable_classes =
 
 zend.enable_gc = On
 
@@ -46,7 +45,6 @@ log_errors = On
 log_errors_max_len = 1024
 ignore_repeated_errors = Off
 ignore_repeated_source = Off
-report_memleaks = On
 track_errors = Off
 html_errors = On
 
