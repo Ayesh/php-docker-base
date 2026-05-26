@@ -38,6 +38,7 @@ RUN apt-get update \
       wkhtmltopdf \
       pdftk \
       libxml2-dev \
+      p7zip-full \
   && apt-get autoremove \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
