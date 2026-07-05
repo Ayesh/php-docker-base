@@ -14,9 +14,124 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: "Build: ${{ matrix.php }}-${{ matrix.platform_name }}"
 
-    name: Build Docker image
+    strategy:
+      matrix:
+        include:
+          - php: php7
+            platform: linux/amd64
+            runner: ubuntu-latest
+            platform_name: amd64
+
+          - php: php7
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            platform_name: arm64
+
+          - php: php8
+            platform: linux/amd64
+            runner: ubuntu-latest
+            platform_name: amd64
+
+          - php: php8
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            platform_name: arm64
+
+          - php: php8latest
+            platform: linux/amd64
+            runner: ubuntu-latest
+            platform_name: amd64
+
+          - php: php8latest
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            platform_name: arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+    - name: Compute image name
+      id: image_name
+      run: |
+        echo "image_name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+    - name: Shallow clone code
+      # v6 https://github.com/actions/checkout/commit/de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+      # v4 https://github.com/docker/setup-qemu-action/commit/ce360397dd3f832beb865e1373c09c0e9f86d70a
+    - uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a
+      with:
+        image: tonistiigi/binfmt:qemu-v10.2.1@sha256:d3b963f787999e6c0219a48dba02978769286ff61a5f4d26245cb6a6e5567ea3
+        platforms: ${{ matrix.platform }}
+
+      # v4 https://github.com/docker/setup-buildx-action/commit/4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+    - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+      with:
+        driver-opts: network=host,image=moby/buildkit:v0.28.0@sha256:37539dd4d60fc70968d164d3850d903a2c56f6402214a1953fbf9fcb81ada731
+        platforms: ${{ matrix.platform }}
+
+      # v4.1 https://github.com/docker/login-action/commit/4907a6ddec9925e35a0a9e82d7399ccc52663121
+    - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }} # ghcr logins allow mixed case usernames
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+      # v7.1 https://github.com/docker/build-push-action/commit/bcafcacb16a39f128d818304e6c9c0c18556b85f
+    - uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
+      name: Build and tag ${{ matrix.php }}
+      id: build
+      with:
+        context: .
+        file: Dockerfile.${{ matrix.php }}
+        platforms: ${{ matrix.platform }}
+        provenance: false
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: "ghcr.io/${{ steps.image_name.outputs.image_name }}"
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+
+      # v7.1 https://github.com/docker/build-push-action/commit/bcafcacb16a39f128d818304e6c9c0c18556b85f
+    - uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
+      name: Build and tag ${{ matrix.php }}-review
+      id: review
+      with:
+        context: .
+        file: Dockerfile.${{ matrix.php }}-review
+        platforms: ${{ matrix.platform }}
+        provenance: false
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: "ghcr.io/${{ steps.image_name.outputs.image_name }}"
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+        build-args: |
+          BASE_IMAGE=ghcr.io/${{ steps.image_name.outputs.image_name }}@${{ steps.build.outputs.digest }}
+
+    - name: Save build digests
+      run: |
+        mkdir digests
+        echo "${{ steps.build.outputs.digest }}" \
+        > digests/${{ matrix.php }}-${{ matrix.platform_name }}.digest
+        
+        echo "${{ steps.review.outputs.digest }}" \
+        > digests/${{ matrix.php }}-${{ matrix.platform_name }}-review.digest
+
+
+      # v7.0.1 https://github.com/actions/upload-artifact/commit/043fb46d1a93c77aae656e7c1c64a875d1fc6a0a:
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: digests-${{ matrix.php }}-${{ matrix.platform_name }}
+        path: digests/*
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Merge and push ${{ matrix.php }} and review image
+
     strategy:
       matrix:
         php:
@@ -25,38 +140,64 @@ jobs:
           - php8latest
 
     steps:
-    - name: Shallow clone code
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
 
-    - name: Login to Container Registry ghcr.io
-      uses: docker/login-action@v4
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }} # ghcr logins allow mixed case usernames
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image name
+        id: image_name
+        run: |
+          echo "image_name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-    - name: Build the container image
-      run: docker build . --tag "ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ matrix.php }}" --file Dockerfile.${{ matrix.php }}
+        # v4.1 https://github.com/docker/login-action/commit/4907a6ddec9925e35a0a9e82d7399ccc52663121
+      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }} # ghcr logins allow mixed case usernames
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Push with commit ${{ matrix.php }} tag
-      run: docker push "ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ matrix.php }}"
+        # v4 https://github.com/docker/setup-buildx-action/commit/4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+        with:
+          driver-opts: network=host,image=moby/buildkit:v0.28.0@sha256:37539dd4d60fc70968d164d3850d903a2c56f6402214a1953fbf9fcb81ada731
+          platforms: linux/amd64,linux/arm64
 
-    #review containers
-    - name: Build the review container image
-      run: docker build . --tag "ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ matrix.php }}-review" --file Dockerfile.${{ matrix.php }}-review
+        # v8.0.1 https://github.com/actions/download-artifact/commit/3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          path: digests
+          merge-multiple: true
 
-    - name: Push with commit *-review tag
-      run: docker push "ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ matrix.php }}-review"
+      - name: Merge and push ${{ matrix.php }} image
+        run: |
+          AMD64=$(cat digests/${{ matrix.php }}-amd64.digest)
+          ARM64=$(cat digests/${{ matrix.php }}-arm64.digest)
+          
+          docker buildx imagetools create \
+            -t ghcr.io/${{ steps.image_name.outputs.image_name }}:${{ matrix.php }} \
+            ghcr.io/${{ steps.image_name.outputs.image_name }}@$AMD64 \
+            ghcr.io/${{ steps.image_name.outputs.image_name }}@$ARM64
+
+      - name: Merge and push ${{ matrix.php }}-review image
+        run: |
+          AMD64=$(cat digests/${{ matrix.php }}-amd64-review.digest)
+          ARM64=$(cat digests/${{ matrix.php }}-arm64-review.digest)
+          
+          docker buildx imagetools create \
+            -t ghcr.io/${{ steps.image_name.outputs.image_name }}:${{ matrix.php }}-review \
+            ghcr.io/${{ steps.image_name.outputs.image_name }}@$AMD64 \
+            ghcr.io/${{ steps.image_name.outputs.image_name }}@$ARM64
 
   cleanup:
-    needs: [build]
+    needs: [merge]
     runs-on: ubuntu-latest
     steps:
 
-    - name: Login to Container Registry ghcr.io
-      uses: docker/login-action@v4
+    - name: Compute image name
+      id: image_name
+      run: |
+        IMAGE_NAME="${GITHUB_REPOSITORY##*/}"
+        echo "package_name=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+
+      # v4.1 https://github.com/docker/login-action/commit/4907a6ddec9925e35a0a9e82d7399ccc52663121
+    - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
       with:
         registry: ghcr.io
         username: ${{ github.repository_owner }} #ghcr logins allow mixed case usernames
@@ -65,6 +206,6 @@ jobs:
     - name: Delete old versions of the package, keeping a few of the newest
       uses: actions/delete-package-versions@v5
       with:
-        package-name: ${{ github.event.repository.name }}
+        package-name: ${{ steps.image_name.outputs.package_name }}
         package-type: container
         min-versions-to-keep: 8
