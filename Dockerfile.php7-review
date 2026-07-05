@@ -1,5 +1,5 @@
-FROM ghcr.io/linkorb/php-docker-base:php7
-
+ARG BASE_IMAGE=ghcr.io/linkorb/php-docker-base:php7
+FROM ${BASE_IMAGE}
 
 RUN mkdir -p /opt
 
